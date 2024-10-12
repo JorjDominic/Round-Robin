@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Round Robin CPU Scheduling Calculator</title>
+  </head>
+  <body>
+    <div class="containerCPU">
+      <h2>Round Robin CPU Scheduling Calculator</h2>
+
+      <form id="processForm">
+        <label for="numProcesses">Number of Processes:</label>
+        <input
+          type="number"
+          id="numProcesses"
+          name="numProcesses"
+          min="1"
+          required
+          oninput="validateInput(event)"
+        />
+        <br /><br />
+
+        <label for="timeQuantum">Time Quantum:</label>
+        <input
+          type="number"
+          id="timeQuantum"
+          name="timeQuantum"
+          min="1"
+          required
+          oninput="validateInput(event)"
+        />
+        <br /><br />
+
+        <button type="button" onclick="createProcessTable()">
+          Create Process Table
+        </button>
+      </form>
+
+      <div id="processTableDiv"></div>
+
+      <div id="results"></div>
+    </div>
+
+    <script>
+      // Function to validate input
+function validateInput(event) {
+  const value = event.target.value;
+
+  // Allow only valid numbers (0-9)
+  if (value === '' || !/^[0-9]*$/.test(value)) {
+    // If not valid, reset the input to an empty string or previous valid value
+    event.target.value = '';
+  }
+}
+
+
+
+      //Creates table for process based on user input 
+      function createProcessTable() {
+        const numProcesses = document.getElementById("numProcesses").value;
+        const timeQuantum = document.getElementById("timeQuantum").value;
+        
+        if (numProcesses <= 0 || timeQuantum <= 0) {
+        alert("Number of Processes and Time Quantum must be greater than zero.");
+        return;
+        }
+        let tableHTML =
+          "<h3>Enter Process Details</h3><table><tr><th>Process</th><th>Arrival Time</th><th>Burst Time</th></tr>";
+
+        for (let i = 0; i < numProcesses; i++) {
+          const processLetter = String.fromCharCode(65 + i); // Convert to uppercase letter (A, B, C, etc.)
+          tableHTML += `<tr>
+                            <td>${processLetter}</td>
+                            <td><input type="number" id="arrival${i}" min="0" required oninput="validateInput(event)"></td>
+                    <td><input type="number" id="burst${i}" min="1" required oninput="validateInput(event)"></td>
+                          </tr>`;
+        }
+
+        tableHTML += '</table><br><div class="button-container"><button type="button" onclick="calculateRR()">Calculate</button></div>';
+
+        document.getElementById("processTableDiv").innerHTML = tableHTML;
+      }
+      //Calculates round robin
+      function calculateRR() {
+        const numProcesses = parseInt(
+          document.getElementById("numProcesses").value
+        );
+        const timeQuantum = parseInt(
+          document.getElementById("timeQuantum").value
+        );
+        let processes = [];
+
+        // Collect process details
+        for (let i = 0; i < numProcesses; i++) {
+          const processLetter = String.fromCharCode(65 + i); // Convert to uppercase letter (A, B, C, etc.)
+          const arrivalStr = document.getElementById(`arrival${i}`).value;
+    const burstStr = document.getElementById(`burst${i}`).value;
+
+    // Check if input values are missing
+    if (arrivalStr.trim() === "" || burstStr.trim() === "") {
+        alert("Please enter values for Arrival and Burst times.");
+        return;
+    }
+
+    // Validate numeric input using regex
+    if (!/^\d+$/.test(arrivalStr) || !/^(0|[1-9]\d*)$/.test(burstStr)) {
+        alert("Please enter valid numeric values for Arrival and Burst times.");
+        return;
+    }
+
+    // Parse the validated string values to integers
+    const arrival = parseInt(arrivalStr);
+    const burst = parseInt(burstStr);
+          if(burst > 0){
+            processes.push({
+            id: processLetter,
+            arrival,
+            burst,
+            remainingBurst: burst,
+            finish: false,
+            startTime: null,
+            index: i
+          });
+          }else{
+            alert("Cannot have 0 burst time");
+            return;
+          }
+         
+        }
+
+        // Sort processes by arrival time
+        processes.sort((a, b) => a.arrival - b.arrival);
+
+        let currentTime = 0;
+        let queue = [];
+        let results = [];
+        let waitingTime = new Array(numProcesses).fill(0);
+        let turnaroundTime = new Array(numProcesses).fill(0);
+        let completed = 0;
+        let totalWaitingTime = 0;
+        let totalTurnaroundTime = 0;
+        let idleTime = 0;
+        let totalExecutedTime = 0; // To calculate CPU utilization
+
+        while (completed < numProcesses) {
+          // Add new processes to the queue if they have arrived
+          for (let i = 0; i < processes.length; i++) {
+            if (
+              processes[i].arrival <= currentTime &&
+              !processes[i].finish &&
+              !queue.includes(processes[i])
+            ) {
+              queue.push(processes[i]);
+            }
+          }
+
+          if (queue.length > 0) {
+            let currentProcess = queue.shift();
+            let executedTime = Math.min(
+              currentProcess.remainingBurst,
+              timeQuantum
+            );
+
+            // Execute process
+            results.push({
+              id: currentProcess.id,
+              start: currentTime,
+              end: currentTime + executedTime,
+            });
+            currentTime += executedTime;
+            totalExecutedTime += executedTime; // Track executed time
+            currentProcess.remainingBurst -= executedTime;
+
+            // If process is finished
+            if (currentProcess.remainingBurst === 0) {
+    currentProcess.finish = true;
+    completed++;
+    const processIndex = currentProcess.index; // Get original index
+    turnaroundTime[processIndex] = currentTime - currentProcess.arrival;
+    waitingTime[processIndex] = turnaroundTime[processIndex] - currentProcess.burst;
+
+    totalTurnaroundTime += turnaroundTime[processIndex];
+    totalWaitingTime += waitingTime[processIndex];
+} else {
+              // If the process didn't finish, re-add to the queue
+              // But first, check for newly arrived processes before re-adding it
+              for (let i = 0; i < processes.length; i++) {
+                if (
+                  processes[i].arrival <= currentTime &&
+                  !processes[i].finish &&
+                  !queue.includes(processes[i]) &&
+                  processes[i] !== currentProcess
+                ) {
+                  queue.push(processes[i]);
+                }
+              }
+              // Finally, add the current process back into the queue
+              queue.push(currentProcess);
+            }
+          } else {
+            // If no process is ready to run, increment time until a process arrives
+            let nextArrivalTime = Infinity;
+            for (let i = 0; i < processes.length; i++) {
+              if (!processes[i].finish && processes[i].arrival > currentTime) {
+                nextArrivalTime = Math.min(
+                  nextArrivalTime,
+                  processes[i].arrival
+                );
+              }
+            }
+            if (nextArrivalTime !== Infinity) {
+              results.push({
+                id: "_",
+                start: currentTime,
+                end: nextArrivalTime,
+              });
+              idleTime += nextArrivalTime - currentTime;
+              currentTime = nextArrivalTime;
+            } else {
+              // If all processes have arrived and no process is ready to run, increment time
+              currentTime++;
+            }
+          }
+        }
+
+        // Calculate total time for CPU utilization
+        const totalTime = results[results.length - 1].end;
+
+        // Calculate CPU Utilization
+        const cpuUtilization = Math.floor(
+          (totalExecutedTime / totalTime) * 100
+        ); // Use Math.floor to get whole number
+
+        // Display Gantt Chart
+        let ganttChartHTML = '<h3>Gantt Chart</h3><div class="gantt-chart">';
+        for (let res of results) {
+          if (res.id === "_") {
+            ganttChartHTML += `<div style="width: ${
+              res.end - res.start
+            }px;" title="Idle (${res.start} - ${res.end})" id="_">_</div>`;
+          } else {
+            ganttChartHTML += `<div style="width: ${
+              res.end - res.start
+            }px;" title="${res.id} (${res.start} - ${res.end})">${
+              res.id
+            }</div>`;
+          }
+        }
+        
+        ganttChartHTML += "</div>";
+
+        // Display Turnaround and Waiting Times
+        let resultHTML =
+          ganttChartHTML +
+          "<h3>Results</h3><table><tr><th>Process</th><th>Arrival Time</th><th>Burst Time</th><th>Finish Time</th><th>Turnaround Time</th><th>Waiting Time</th></tr>";
+
+            for (let i = 0; i < numProcesses; i++) {
+    const processIndex = processes[i].index; // Get original index
+    resultHTML += `<tr><td>${processes[i].id}</td><td>${
+        processes[i].arrival
+    }</td><td>${processes[i].burst}</td><td>${
+        turnaroundTime[processIndex] + processes[i].arrival
+    }</td><td>${turnaroundTime[processIndex]}</td><td>${waitingTime[processIndex]}</td></tr>`;
+}
+
+        const avgTurnaroundTime = (totalTurnaroundTime / numProcesses).toFixed(
+          2
+        );
+        const avgWaitingTime = (totalWaitingTime / numProcesses).toFixed(2);
+
+        resultHTML += `</table>`;
+        resultHTML += `<table><tr><th>Average Turnaround Time</th><th>Average Waiting Time</th><th>CPU Utilization</th></tr>`;
+        resultHTML += `<tr><td>${avgTurnaroundTime}</td>`;
+        resultHTML += `<td>${avgWaitingTime}</td>`;
+        resultHTML += `<td>${cpuUtilization}%</td>`;
+        resultHTML += `</tr></table>`;
+
+        document.getElementById("results").innerHTML = resultHTML;
+      }
+    </script>
+  </body>
+</html>
